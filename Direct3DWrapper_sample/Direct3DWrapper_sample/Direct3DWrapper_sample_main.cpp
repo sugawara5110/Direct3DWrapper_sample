@@ -255,12 +255,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		if (360.0f < (lightTheta += 0.2f))lightTheta = 0.0f;
 		VectorMatrixMultiply(&lightPos, &thetaZ);
 
-		//DXR用光源のアップデート
+		//ラスタライザ用光源のアップデート
 		Dx_Light::PointLightPosSet(0,
 			lightPos,
 			{ 1, 1, 1, 1 }, true, 1000);
 
 		//各バッファ更新
+
+		//DXR用光源
 		light->Instancing(lightPos,
 			{ 0, 0, 0 },
 			{3, 3, 3 }, { 0, 0, 0, 0 });
