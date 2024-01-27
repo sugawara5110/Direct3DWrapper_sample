@@ -1,11 +1,14 @@
 //////////////////////////////////Common/Direct3DWrapper sample////////////////////////////////////////////////////////
 
-#define _CRT_SECURE_NO_WARNINGS
+#include <vector>
+#include <memory>
+
 #include"../../../Common/Direct3DWrapper/Dx12Process.h"
 #include"../../../Common/Direct3DWrapperOption/DxText.h"
 #include"../../../Common/Direct3DWrapperOption/Dx_Bloom.h"
 #include"../../../Common/Direct3DWrapperOption/Dx_Wave.h"
 #include"../../../Common/Window/Win.h"
+
 #include"../../../JPGLoader/JPGLoader.h"
 #include"../../../PNGLoader/PNGLoader.h"
 #include"../../../Common/SearchFile/SearchFile.h"
@@ -18,8 +21,6 @@
 
 using namespace CoordTf;
 
-#include <vector>
-#include <memory>
 
 //テクスチャ読み込み
 void createTexture(Dx_TextureHolder* dx) {
@@ -30,14 +31,16 @@ void createTexture(Dx_TextureHolder* dx) {
 	strE[2] = "tif";
 	sf->Search(L"./tex/*", 0, strE, 3);//指定ディレクトリ内からファイル名取得
 	UINT numFile1 = sf->GetFileNum(0);
+	UINT resCnt = 0;
+	ARR_DELETE(strE);
 	JPGLoader jpg;
 	PNGLoader png;
 	TIFLoader tif;
-	UINT resCnt = 0;
-	ARR_DELETE(strE);
 	for (int i = 0; i < sf->GetFileNum(0); i++) {
+		
 		char* str = sf->GetFileName(0, i);
-		UCHAR* byte = jpg.loadJPG(str, 0, 0, nullptr);//jpg展開
+		UCHAR* byte = nullptr;
+		byte = jpg.loadJPG(str, 0, 0, nullptr);//jpg展開
 		unsigned int w = jpg.getSrcWidth();//テクスチャの元のサイズ
 		unsigned int h = jpg.getSrcHeight();
 		if (byte == nullptr) {
@@ -75,10 +78,12 @@ static UINT index6[] =
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+	
+	Dx_Util::memory_leak_test();
 
 	srand((unsigned)time(NULL));
 
-	HWND hWnd;
+	HWND hWnd = nullptr;
 	MSG msg;
 
 	if (Createwindow(&hWnd, hInstance, nCmdShow, CURRWIDTH, CURRHEIGHT, L"Direct3DWrapper sample") == -1)return FALSE;
@@ -86,12 +91,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	Dx_Device::InstanceCreate();
 	Dx_Device::GetInstance()->createDevice();
 	Dx_Device::GetInstance()->reportLiveDeviceObjectsOn();
+
 	Dx_CommandManager::InstanceCreate();
 	Dx_SwapChain::InstanceCreate();
 
 	Dx_TextureHolder::InstanceCreate();
 	Dx_TextureHolder* dx = Dx_TextureHolder::GetInstance();
-	
+	createTexture(dx);//テクスチャ登録
+
 	Dx_Device* dev = Dx_Device::GetInstance();
 	dev->dxrCreateResource();
 	Dx_SwapChain* sw = Dx_SwapChain::GetInstance();
@@ -105,9 +112,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	Dx_ShaderHolder::CreateShaderByteCode();
 	//Dx_ShaderHolder::setNorTestPS();//ラスタライザ側ノーマルマップテスト
 
-	createTexture(dx);//テクスチャ登録
-
-	Dx_Light::setGlobalAmbientLight(0.2f, 0.2f, 0.2f);//アンビエント(ラスタライザ, DXR共用)
+	Dx_Light::setGlobalAmbientLight(0.05f, 0.05f, 0.05f);//アンビエント(ラスタライザ, DXR共用)
 
 	Control* con = Control::GetInstance();
 	DxInput* di = DxInput::GetInstance();
@@ -137,7 +142,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	pd[1]->GetVBarray(SQUARE, 1);
 	pd[2] = new PolygonData();
 	pd[2]->GetVBarray(SQUARE, 1);
-	
+
+	PolygonData* tome;
+	tome = new PolygonData();
+	tome->GetVBarray(SQUARE, 1);
+
 	Wave* wav;//波
 	wav = new Wave();
 	wav->GetVBarray(1);
@@ -150,16 +159,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	VECTOR3 v3s[] = { {1,1,1} };
 	Vertex* v = (Vertex*)CreateGeometry::createCube(1, v3, v3s, false);
 	Vertex* vr = (Vertex*)CreateGeometry::createCube(1, v3, v3s, true);
-	unsigned int* ind = CreateGeometry::createCubeIndex(1);
+	unsigned int* ind = CreateGeometry::createCubeIndex(1,false);
+	unsigned int* indr = CreateGeometry::createCubeIndex(1, true);
 
 	Vertex* sv = (Vertex*)CreateGeometry::createSphere(10, 10, 1, v3, v3s, false);
-	unsigned int* svI = CreateGeometry::createSphereIndex(10, 10, 1);
+	unsigned int* svI = CreateGeometry::createSphereIndex(10, 10, 1,false);
 
 	pd[0]->setVertex(v, 24, ind, 36);
-	pd[1]->setVertex(vr, 24, ind, 36);
+	pd[1]->setVertex(vr, 24, indr, 36);
 	pd[2]->setVertex(sv, 11 * 11, svI, 10 * 10 * 6);
 	wav->SetVertex(ver4, 4, index6, 6);
 	light->setVertex(v, 24, ind, 36);
+	tome->setVertex(sv, 11 * 11, svI, 10 * 10 * 6);
 
 	//スキンメッシュFBXのみ
 	//使用するテクスチャは事前にcreateTextureArrで登録しておく
@@ -167,30 +178,36 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	SkinMesh* sk;
 	sk = new SkinMesh();
 	sk->SetState(true, true);
-	sk->GetFbx("player1_fbx_att.fbx");
+	//sk->GetFbx("player1_fbx_att.fbx");
+	sk->GetFbx("../../../texturePPM/player1_fbx_att.fbx");
 	sk->GetBuffer(1, sk->getMaxEndframe(0, 0));
 	sk->SetVertex(true, true);
 
 	UserInterfaceWindow* uw;
 	uw = new UserInterfaceWindow();
 	uw->setNumWindow(1);
-	
+
 	//↓各メッシュ生成, コマンドリスト必要
 	cObj->Bigin();
 	d2->CreateBox(0, 0.0f, 0.0f, 0.0f, 0.1f, 0.1f, 1.0f, 1.0f, 1.0f, 1.0f, true, true);
 	pd[0]->Create(0, true, dx->GetTexNumber("wall1.jpg"),
-		dx->GetTexNumber("wall1Nor.png"),
+	dx->GetTexNumber("wall1Nor.png"),
 		dx->GetTexNumber("wall1.jpg"), false, false, false);
 	pd[1]->Create(0, true, dx->GetTexNumber("wall1.jpg"),
-		dx->GetTexNumber("wall1Nor.png"),
+	dx->GetTexNumber("wall1Nor.png"),
 		dx->GetTexNumber("wall1.jpg"), false, false, false);
 	pd[2]->setMaterialType(METALLIC);
 	pd[2]->Create(0, true, dx->GetTexNumber("siro.png"),
 		-1,
 		-1, true, true, false);
-	wav->setMaterialType(METALLIC);//DXR用マテリアル設定
+
+	tome->setMaterialType((MaterialType)(TRANSLUCENCE | METALLIC));
+	tome->Create(0, true, dx->GetTexNumber("siro.png"),
+		-1,
+		-1, true, true, false);
+	wav->setMaterialType((MaterialType)(TRANSLUCENCE | METALLIC));//DXR用マテリアル設定
 	wav->Create(0, dx->GetTexNumber("wave.jpg"), -1,
-		true, true, 0.05f, 64.0f, true);
+		true, true, 0.05f, 64.0f, false);
 	light->setMaterialType(EMISSIVE);
 	light->Create(0, false, dx->GetTexNumber("siro.png"),
 		-1,
@@ -213,6 +230,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ARR_DELETE(v);
 	ARR_DELETE(vr);
 	ARR_DELETE(ind);
+	ARR_DELETE(indr);
 	ARR_DELETE(sv);
 	ARR_DELETE(svI);
 
@@ -231,10 +249,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 	pdx.push_back(wav->getParameter());
 	pdx.push_back(light->getParameter());
+	pdx.push_back(tome->getParameter());
 
 	//DXR初期化,登録
-	dxr->initDXR(pdx, 9
+	dxr->initDXR(pdx, 8
 		//Normal//引数無し:通常, ID:IDMap, Normal:NormalMap
+		//,Normal
 	);
 
 	//ブルーム
@@ -245,9 +265,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		{128, 32}
 	};
 	std::vector<float> sigma = { 10 };
-	std::vector<Dx_Bloom::GaussianType> type = { Dx_Bloom::GaussianType::Type1D};
+	std::vector<Dx_Bloom::GaussianType> type = { Dx_Bloom::GaussianType::Type1D };
 
-	bl->Create(0, 1, 
+	bl->Create(0, 1,
 		dxr->getInstanceIdMap(),//DXRで生成したインスタンスID MAP入力
 		&sigma, &gausu, &type);
 
@@ -288,14 +308,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		//DXR用光源
 		light->Instancing(lightPos,
 			{ 0, 0, 0 },
-			{3, 3, 3 }, { 0, 0, 0, 0 });
+			{ 3, 3, 3 }, { 0, 0, 0, 0 });
 		light->InstancingUpdate(0.2f);
 		light->setPointLight(0, true, 1000);
 
 		d2->Update(0, 0, 0,
 			1.0f, 1.0f, 1.0f, 1.0f, 50, 50);
 
-		pd[0]->Instancing({18, 0, 10},
+		pd[0]->Instancing({ 18, 0, 10 },
 			{ 0, 0, cubeTheta },
 			{ 7, 7, 7 }, { 0, 0, 0, 0 });
 		pd[0]->InstancingUpdate(0.2f);
@@ -311,6 +331,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			{ 7, 7, 7 }, { 0, 0, 0, 0 });
 		pd[2]->InstancingUpdate(0.2f);
 
+		tome->setRefractiveIndex(0.8f);
+		tome->Instancing({ 0, 0, 25 },
+			{ 0, 0, 0 },
+			{ 7, 7, 7 }, { 0, 0, 0, -0.7f });//Color A Min-0.99
+		tome->InstancingUpdate(0.2f);
+
 		wav->Instancing({ 0, 0, 0 },
 			{ 0, 0, 0 },
 			{ 40, 40, 40 }, { 0, 0, 0, -0.2f });
@@ -321,13 +347,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			32, 32,
 			0.4f);//波の高さ
 
-		sk->Update(0, 0.1f, { -15,0,15 }, { 0,0,0,0 }, { -90,0,0 }, { 2.0f,2.0f,2.0f }, 0);
+		sk->Update(0, 0.1f, { -15,0,15 }, { 0,0,0,0 }, { -90,0,0 }, { 0.02f,0.02f,0.02f }, 0);
 
 		int rF = uw->updatePos(0, 200, 100);
 		if (rF == 0)ray = true;
 		if (rF == 1)ray = false;
 
-		text->UpDateText("↑↓で選択『Ctrl』で決定   ", 200, 85, 15, {1.0f, 1.0f, 1.0f, 1.0f});
+		text->UpDateText("↑↓で選択『Ctrl』で決定   ", 200, 85, 15, { 1.0f, 1.0f, 1.0f, 1.0f });
 		text->UpDate();//テキストのアップデートの最後に実行
 
 		//コマンドリスト実行
@@ -340,7 +366,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			pd[0]->Draw(0);
 			pd[1]->Draw(0);
 			sk->Draw(0);//透けさせたい場合先に描画
-			pd[2]->Draw(0);//半透明
+			pd[2]->Draw(0);
+			tome->Draw(0);
 			wav->Draw(0);
 			uw->Draw(0, 0);
 			text->Draw(0);
@@ -360,6 +387,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			pd[1]->StreamOutput(0);
 			sk->StreamOutput(0);
 			pd[2]->StreamOutput(0);
+			tome->StreamOutput(0);
 			wav->StreamOutput(0);
 			cObj->End();
 			cMa->RunGpu();
@@ -375,7 +403,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			dxr->raytrace_c(0);
 			cObjCom->End();
 			cMa->RunGpuCom();
-			
+
 			//レイトレ後のバッファコピー
 			cObj2->Bigin();
 			dxr->copyBackBuffer(2);
@@ -395,6 +423,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			std::vector<Dx_Bloom::InstanceParam>pa = { pa1 };
 			bl->Compute(3, pa, sw->GetRtBuffer());
 
+			wav->UpdateDxrDivideBuffer();
+
 			//レイトレ後のラスタライザ描画
 			cObj->Bigin();
 			sw->BiginDraw(0, false);
@@ -407,7 +437,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			cMa->WaitFence();
 			sw->DrawScreen();
 		}
-		wav->UpdateDxrDivideBuffer();
 	}
 
 	cMa->WaitFence();
@@ -419,16 +448,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	S_DELETE(pd[0]);
 	S_DELETE(pd[1]);
 	S_DELETE(pd[2]);
+	S_DELETE(tome);
 	S_DELETE(wav);
 	S_DELETE(sk);
 	S_DELETE(bl);
 	S_DELETE(dxr);
+
+
 	DxInput::DeleteInstance();
 	Control::DeleteInstance();
 	DxText::DeleteInstance();
-	Dx_SwapChain::DeleteInstance();
 	Dx_TextureHolder::DeleteInstance();
+	Dx_SwapChain::DeleteInstance();
 	Dx_CommandManager::DeleteInstance();
 	Dx_Device::DeleteInstance();
+
 	return 0;
 }
+
